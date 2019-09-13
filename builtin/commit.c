@@ -111,6 +111,9 @@ static int no_post_rewrite, allow_empty_message;
 static char *untracked_files_arg, *force_date, *ignore_submodule_arg, *ignored_arg;
 static char *sign_commit;
 
+static int have_option_pre_commit;
+static struct strbuf pre_commit = STRBUF_INIT;
+
 /*
  * The default commit message cleanup mode will remove the lines
  * beginning with # (shell comments) and leading and trailing
@@ -658,6 +661,20 @@ static void adjust_comment_line_char(const struct strbuf *sb)
 	comment_line_char = *p;
 }
 
+static int opt_parse_pre_commit(const struct option *opt, const char *arg, int unset)
+{
+	struct strbuf *buf = opt->value;
+
+	if (unset) {
+		have_option_pre_commit = 0;
+		strbuf_setlen(buf, 0);
+	} else {
+		have_option_pre_commit = 1;
+		strbuf_addstr(buf, arg);
+	}
+	return 0;
+}
+
 static int prepare_to_commit(const char *index_file, const char *prefix,
 			     struct commit *current_head,
 			     struct wt_status *s,
@@ -675,9 +692,19 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
 
 	/* This checks and barfs if author is badly specified */
 	determine_author_info(author_ident);
+	if (have_option_pre_commit) {
+		const char *pre_commit_dir = "pre-commit.d/";
 
-	if (!no_verify && run_commit_hook(use_editor, index_file, "pre-commit", NULL))
+		strbuf_insert(&pre_commit, 0, pre_commit_dir, strlen(pre_commit_dir));
+		if (no_verify)
+			die(_("incompatible option --no-verify and --pre-commit"));
+		if (!find_hook(pre_commit.buf))
+			die(_("no such file %s"), pre_commit.buf);
+		if (run_commit_hook(use_editor, index_file, pre_commit.buf, NULL))
+			return 0;
+	} else if (!no_verify && run_commit_hook(use_editor, index_file, "pre-commit", NULL)) {
 		return 0;
+	}
 
 	if (squash_message) {
 		/*
@@ -1519,6 +1546,7 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 		OPT_BOOL('p', "patch", &patch_interactive, N_("interactively add changes")),
 		OPT_BOOL('o', "only", &only, N_("commit only specified files")),
 		OPT_BOOL('n', "no-verify", &no_verify, N_("bypass pre-commit and commit-msg hooks")),
+		OPT_CALLBACK(0, "pre-commit", &pre_commit, N_("script"), N_("use specified pre-commit script"), opt_parse_pre_commit),
 		OPT_BOOL(0, "dry-run", &dry_run, N_("show what would be committed")),
 		OPT_SET_INT(0, "short", &status_format, N_("show status concisely"),
 			    STATUS_FORMAT_SHORT),
