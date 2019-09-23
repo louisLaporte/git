@@ -91,6 +91,30 @@ test_expect_success 'clone from hooks' '
 
 '
 
+test_expect_success 'clone from specified pre-commit hooks' '
+
+	test_create_repo r4 &&
+	cd r4 &&
+	test_commit initial &&
+	cd .. &&
+	git init r5 &&
+	cd r5 &&
+	mkdir .git/hooks/pre-commit.d &&
+	cat >.git/hooks/pre-commit.d/my_pre_commit <<-\EOF &&
+	#!/bin/sh
+	git clone ../r4 ../r6
+	exit 1
+	EOF
+	chmod u+x .git/hooks/pre-commit.d/my_pre_commit &&
+	: >file &&
+	git add file &&
+	test_must_fail git commit --pre-commit=my_pre_commit -m invoke-hook &&
+	cd .. &&
+	test_cmp r4/.git/HEAD r6/.git/HEAD &&
+	test_cmp r4/initial.t r6/initial.t
+
+'
+
 test_expect_success 'clone creates intermediate directories' '
 
 	git clone src long/path/to/dst &&

@@ -6,6 +6,7 @@ test_description='pre-commit and pre-merge-commit hooks'
 
 HOOKDIR="$(git rev-parse --git-dir)/hooks"
 PRECOMMIT="$HOOKDIR/pre-commit"
+PRECOMMIT_DIR="$HOOKDIR/pre-commit.d"
 PREMERGE="$HOOKDIR/pre-merge-commit"
 
 # Prepare sample scripts that write their $0 to actual_hooks
@@ -32,6 +33,35 @@ test_expect_success 'sample script setup' '
 	echo $0 >>actual_hooks
 	test "$GIT_AUTHOR_NAME" = "New Author" &&
 	test "$GIT_AUTHOR_EMAIL" = "newauthor@example.com"
+	EOF
+'
+
+test_expect_success 'pre-commit scripts setup' '
+	mkdir $PRECOMMIT_DIR &&
+	write_script "$PRECOMMIT_DIR/check_commit" <<-\EOF &&
+	#!/bin/sh
+	test -z "$(git diff --cached --check)"
+	EOF
+	write_script "$PRECOMMIT_DIR/run_container_linter_ok" <<-\EOF &&
+	#!/bin/sh
+	echo "run_container_linter_ok"
+	EOF
+	write_script "$PRECOMMIT_DIR/run_container_linter_fail" <<-\EOF &&
+	#!/bin/sh
+	echo "run_container_linter_fail"
+	exit 1
+	EOF
+	write_script "$PRECOMMIT_DIR/main_fail" <<-\EOF &&
+	#!/bin/sh
+	PRECOMMIT_DIR="$(pwd)/.git/hooks/pre-commit.d"
+	"$PRECOMMIT_DIR/check_commit"
+	"$PRECOMMIT_DIR/run_container_linter_fail"
+	EOF
+	write_script "$PRECOMMIT_DIR/main_ok" <<-\EOF
+	#!/bin/sh
+	PRECOMMIT_DIR="$(pwd)/.git/hooks/pre-commit.d"
+	"$PRECOMMIT_DIR/check_commit"
+	"$PRECOMMIT_DIR/run_container_linter_ok"
 	EOF
 '
 
@@ -276,6 +306,37 @@ test_expect_success 'check the author in hook' '
 		--allow-empty -m "by new.author via command line" &&
 	git show -s &&
 	test_cmp expected_hooks actual_hooks
+'
+
+test_expect_success 'with succeding specified pre-commit hooks' '
+	echo "foo" >file &&
+	git add file &&
+	git commit -m "bar" --pre-commit=main_ok file
+'
+
+test_expect_success 'with failing specified pre-commit hooks' '
+	echo "foo" >>file &&
+	git add file &&
+	test_must_fail git commit -m "bar" --pre-commit=main_fail file
+'
+
+test_expect_success 'with failing specified pre-commit hooks from hooksPath' '
+	cp -r .git/hooks .git/custom-hooks &&
+	mv .git/custom-hooks/pre-commit.d/main_fail \
+		.git/custom-hooks/main_custom_fail &&
+	git config core.hooksPath .git/custom-hooks &&
+	echo "foo" >>file &&
+	git add file &&
+	test_must_fail git commit -m "bar" --pre-commit=main_custom_fail file &&
+	git config --unset core.hooksPath
+'
+
+test_expect_success 'with failing specified pre-commit hook and --no-verify' '
+	echo "foo" >>file &&
+	git add file &&
+	test_must_fail git commit -m "bar" --no-verify \
+		--pre-commit=run_container_linter_ok file 2>stderr &&
+	grep "fatal: incompatible option --no-verify and --pre-commit" stderr
 '
 
 test_done
