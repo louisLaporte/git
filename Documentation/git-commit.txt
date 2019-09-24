@@ -11,8 +11,9 @@ SYNOPSIS
 'git commit' [-a | --interactive | --patch] [-s] [-v] [-u<mode>] [--amend]
 	   [--dry-run] [(-c | -C | --fixup | --squash) <commit>]
 	   [-F <file> | -m <msg>] [--reset-author] [--allow-empty]
-	   [--allow-empty-message] [--no-verify] [-e] [--author=<author>]
-	   [--date=<date>] [--cleanup=<mode>] [--[no-]status]
+	   [--allow-empty-message] [--no-verify] [--pre-commit] [-e]
+	   [--author=<author>] [--date=<date>] [--cleanup=<mode>]
+	   [--[no-]status]
 	   [-i | -o] [-S[<keyid>]] [--] [<file>...]
 
 DESCRIPTION
@@ -174,6 +175,14 @@ The `-m` option is mutually exclusive with `-c`, `-C`, and `-F`.
 -n::
 --no-verify::
 	This option bypasses the pre-commit and commit-msg hooks.
+	See also linkgit:githooks[5].
+
+--pre-commit=<script>::
+	Use the specified script as a pre-commit hook.  The file must
+	be located in .git/hooks/pre-commit.d/ directory.  This option
+	bypasses the named pre-commit script when it is enable, and let
+	the post-commit mechanism unchanged. The --no-verify option and
+	the --pre-commit are mutually exclusive.
 	See also linkgit:githooks[5].
 
 --allow-empty::
